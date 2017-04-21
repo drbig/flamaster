@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"text/template"
 )
 
 const (
@@ -29,10 +30,14 @@ var (
 	flagOutputFileTemplate string
 	flagOutputRoot         string
 	logger                 *log.Logger
+	tmpl                   *template.Template
 )
 
 type (
-	Item map[string]string
+	Item             map[string]string
+	MultiItemPayload struct {
+		Items []Item
+	}
 )
 
 func init() {
@@ -50,7 +55,7 @@ flamaster v%s, see LICENSE.txt
 
 	flag.BoolVar(&flagVerbose, "v", false, "be very verbose")
 	flag.BoolVar(
-		&flagSingleOutput, "s",
+		&flagSingleOutput, "os",
 		false,
 		"process all items within single template run",
 	)
@@ -76,19 +81,37 @@ func main() {
 		logger = log.New(ioutil.Discard, "", 0)
 	}
 
-	if flag.NArg() != 1 {
-		fmt.Fprintf(os.Stderr, "No input csv file name specified.\n\n")
+	if flag.NArg() != 2 {
+		fmt.Fprintf(os.Stderr, "You have to specify a template and a CSV.\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 
+	parse_template()
 	items := parse_csv()
-	fmt.Println(items)
+
+	logger.Print(items)
+
+	payload := MultiItemPayload{Items: items}
+	tmpl.Execute(os.Stdout, payload)
+}
+
+func parse_template() {
+	const arg = 0
+	var err error
+
+	logger.Printf("Parsing template at '%s'...", flag.Arg(arg))
+	tmpl, err = template.ParseFiles(flag.Arg(0))
+	if err != nil {
+		_die_on_err(err)
+	}
 }
 
 func parse_csv() (items []Item) {
-	logger.Printf("Opening input CSV at '%s'...", flag.Arg(0))
-	fh, err := os.Open(flag.Arg(0))
+	const arg = 1
+
+	logger.Printf("Opening input CSV at '%s'...", flag.Arg(arg))
+	fh, err := os.Open(flag.Arg(arg))
 	if err != nil {
 		_die_on_err(err)
 	}
