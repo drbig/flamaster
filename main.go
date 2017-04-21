@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -81,6 +82,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	items := parse_csv()
+	fmt.Println(items)
+}
+
+func parse_csv() (items []Item) {
 	logger.Printf("Opening input CSV at '%s'...", flag.Arg(0))
 	fh, err := os.Open(flag.Arg(0))
 	if err != nil {
@@ -88,30 +94,30 @@ func main() {
 	}
 	defer fh.Close()
 
-	// Parse CSV
 	var headers []string
-	var items []Item
 	section := ""
 
 	logger.Print("Parsing CSV file...")
 	csv := csv.NewReader(bufio.NewReader(fh))
 	for {
-		record, done := read_record(csv)
+		record, done := _read_csv_record(csv)
 		if done {
 			break
 		}
 		logger.Printf("At row: `%s`", record)
 
-		if section == "" && HEADERS[record[0]] {
-			section = record[0]
+		if section != "" && record[0] == "" {
+			section = ""
 			continue
 		}
 
 		if record[0] == "" {
-			if section != "" {
-				section = ""
-				continue
-			}
+			continue
+		}
+
+		if section == "" && HEADERS[record[0]] {
+			section = record[0]
+			continue
 		}
 
 		switch section {
@@ -127,11 +133,15 @@ func main() {
 			}
 
 			items = append(items, item)
+		default:
+			_die_on_err(errors.New("Got garbage! Please run with `-v` flag."))
 		}
 	}
+
+	return items
 }
 
-func read_record(r *csv.Reader) (record []string, done bool) {
+func _read_csv_record(r *csv.Reader) (record []string, done bool) {
 	record, err := r.Read()
 
 	if err == io.EOF {
