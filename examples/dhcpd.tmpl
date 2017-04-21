@@ -1,0 +1,5 @@
+{{- range .Items -}}
+{{- if index . "lan_ether" -}}
+  host {{index . "name"}}-lan { hardware ethernet {{index . "lan_ether"}}; fixed-address: {{index . "lan_ip"}}; }
+{{end}}
+{{- end -}}
