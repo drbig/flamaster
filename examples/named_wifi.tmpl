@@ -1,0 +1,12 @@
+$TTL 3h
+w. SOA w. w. 44 1d 12h 1w 3h
+        ; Serial, Refresh, Retry, Expire, Neg. cache TTL
+
+            NS localhost
+localhost   A   127.0.0.1
+localhost   AAAA        ::1
+{{range .Items -}}
+{{- if index . "wifi_ether" -}}
+{{index . "name" | printf "%-32s"}} A {{index . "wifi_ip"}}
+{{end}}
+{{- end -}}
