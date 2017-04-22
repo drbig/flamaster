@@ -35,6 +35,7 @@ var (
 
 var (
 	flagVerbose            bool        // Be _very_ verbose
+	flagTemplatePath       string      // Path to the tempplate to use
 	flagSingleOutput       bool        // Process all items with single template
 	flagOutputFileTemplate string      // Text template for generating output file names
 	flagOutputRoot         string      // Where to output files by default
@@ -67,6 +68,11 @@ flamaster v%s, see LICENSE.txt
 	}
 
 	flag.BoolVar(&flagVerbose, "v", false, "be very verbose")
+	flag.StringVar(
+		&flagTemplatePath, "templ",
+		"",
+		"Path to the template file to use.",
+	)
 	flag.BoolVar(
 		&flagSingleOutput, "os",
 		false,
@@ -92,6 +98,8 @@ flamaster v%s, see LICENSE.txt
 //  4. Merge in options if any given
 //	5. Spit out a template or templates
 func main() {
+	var err error
+
 	flag.Parse()
 	if flagVerbose {
 		logger = log.New(os.Stderr, "", log.Lshortfile|log.Ltime)
@@ -100,24 +108,19 @@ func main() {
 		logger = log.New(ioutil.Discard, "", 0)
 	}
 
-	if flag.NArg() != 2 {
-		fmt.Fprintf(os.Stderr, "You have to specify a template and a CSV.\n\n")
-		flag.Usage()
-		os.Exit(1)
+	if flag.NArg() != 1 {
+		_die_on_args("You have to specify a CSV file to process.\n\n")
 	}
 
-	tmpl := parse_template()
 	options, headers, items := parse_csv()
-
 	if len(options) > 0 {
 		logger.Print("Merging options...")
 		for k, v := range options {
-			if err := flag.Set(k, v); err != nil {
+			if err = flag.Set(k, v); err != nil {
 				_die_on_err(err)
 			}
 		}
 	}
-
 	if flagVerbose {
 		flag.VisitAll(func(f *flag.Flag) {
 			logger.Printf(
@@ -126,6 +129,28 @@ func main() {
 			)
 		})
 	}
+
+	if flagTemplatePath == "" {
+		_die_on_args("No template specified.")
+	}
+
+	if !flagSingleOutput && flagOutputFileTemplate == "" {
+		_die_on_args(
+			"You have to specify at least `-ot` to generate multiple files.",
+		)
+	}
+
+	var out_f_tmpl *template.Template
+	if flagOutputFileTemplate != "" {
+		logger.Print("Parsing output file name template...")
+		out_f_tmpl = template.New("output-file-name")
+		out_f_tmpl, err = out_f_tmpl.Parse(flagOutputFileTemplate)
+		if err != nil {
+			_die_on_err(err)
+		}
+	}
+
+	tmpl := parse_template()
 
 	if flagSingleOutput {
 		logger.Print("Running all items once...")
@@ -145,25 +170,10 @@ func main() {
 	}
 }
 
-// Parse the template.
-// Accesses the arguments directly.
-func parse_template() (tmpl *template.Template) {
-	const arg = 0
-	var err error
-
-	logger.Printf("Parsing template at '%s'...", flag.Arg(arg))
-	tmpl, err = template.ParseFiles(flag.Arg(0))
-	if err != nil {
-		_die_on_err(err)
-	}
-
-	return tmpl
-}
-
 // Pparse the CSV.
 // Accesses the arguments directly.
 func parse_csv() (options Options, headers Headers, items []Item) {
-	const arg = 1
+	const arg = 0
 	options = make(Options)
 	headers = make(Headers)
 
@@ -232,6 +242,18 @@ func parse_csv() (options Options, headers Headers, items []Item) {
 	return options, headers, items
 }
 
+// Parse the template.
+// Accesses the arguments directly.
+func parse_template() (tmpl *template.Template) {
+	logger.Printf("Parsing template at '%s'...", flagTemplatePath)
+	tmpl, err := template.ParseFiles(flagTemplatePath)
+	if err != nil {
+		_die_on_err(err)
+	}
+
+	return tmpl
+}
+
 // Helper for reading a single CSV record.
 // Will die on any error except hitting end of file, which is not an error.
 func _read_csv_record(r *csv.Reader) (record []string, done bool) {
@@ -244,6 +266,13 @@ func _read_csv_record(r *csv.Reader) (record []string, done bool) {
 	}
 
 	return record, false
+}
+
+// Helper for dying on insufficient arguments.
+func _die_on_args(msg string) {
+	fmt.Fprintf(os.Stderr, msg)
+	flag.Usage()
+	os.Exit(1)
 }
 
 // Helper for dying in a decent fashion.
