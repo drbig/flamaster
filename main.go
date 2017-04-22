@@ -14,13 +14,17 @@ import (
 )
 
 const (
-	VERSION      = "0.1"
-	HEADER_ITEMS = "items"
+	VERSION        = "0.1"
+	HEADER_OPTIONS = "options"
+	HEADER_HEADERS = "headers"
+	HEADER_ITEMS   = "items"
 )
 
 var (
 	HEADERS = map[string]bool{
-		HEADER_ITEMS: true,
+		HEADER_OPTIONS: true,
+		HEADER_HEADERS: true,
+		HEADER_ITEMS:   true,
 	}
 )
 
@@ -31,13 +35,6 @@ var (
 	flagOutputRoot         string
 	logger                 *log.Logger
 	tmpl                   *template.Template
-)
-
-type (
-	Item             map[string]string
-	MultiItemPayload struct {
-		Items []Item
-	}
 )
 
 func init() {
@@ -88,12 +85,9 @@ func main() {
 	}
 
 	parse_template()
-	items := parse_csv()
+	_, items := parse_csv()
 
-	logger.Print(items)
-
-	payload := MultiItemPayload{Items: items}
-	tmpl.Execute(os.Stdout, payload)
+	tmpl.Execute(os.Stdout, items)
 }
 
 func parse_template() {
@@ -107,7 +101,7 @@ func parse_template() {
 	}
 }
 
-func parse_csv() (items []Item) {
+func parse_csv() (options map[string]string, items []map[string]string) {
 	const arg = 1
 
 	logger.Printf("Opening input CSV at '%s'...", flag.Arg(arg))
@@ -117,7 +111,9 @@ func parse_csv() (items []Item) {
 	}
 	defer fh.Close()
 
-	var headers []string
+	var item_headers []string
+	var raw_items []map[string]string
+	headers := make(map[string]string)
 	section := ""
 
 	logger.Print("Parsing CSV file...")
@@ -145,23 +141,43 @@ func parse_csv() (items []Item) {
 
 		switch section {
 		case HEADER_ITEMS:
-			if len(headers) == 0 {
-				headers = record
+			if len(item_headers) == 0 {
+				item_headers = record
 				continue
 			}
 
-			item := make(Item, len(headers))
-			for idx, header := range headers {
+			item := make(map[string]string, len(item_headers))
+			for idx, header := range item_headers {
 				item[header] = record[idx]
 			}
 
-			items = append(items, item)
+			raw_items = append(raw_items, item)
+		case HEADER_HEADERS:
+			headers[record[0]] = record[1]
+		case HEADER_OPTIONS:
+			options[record[0]] = record[1]
 		default:
 			_die_on_err(errors.New("Got garbage! Please run with `-v` flag."))
 		}
 	}
 
-	return items
+	logger.Printf("Parsed options: `%s`", options)
+	logger.Printf("Parsed headers: `%s`", headers)
+	logger.Printf("Parsed items: `%s`", raw_items)
+
+	logger.Print("Merging headers into items...")
+	for _, raw_item := range raw_items {
+		item := make(map[string]string, len(item_headers)+len(headers))
+		for k, v := range headers {
+			item[k] = v
+		}
+		for k, v := range raw_item {
+			item[k] = v
+		}
+		items = append(items, item)
+	}
+
+	return options, items
 }
 
 func _read_csv_record(r *csv.Reader) (record []string, done bool) {
