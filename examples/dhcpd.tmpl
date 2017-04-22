@@ -1,13 +1,13 @@
-{{- range . -}}
+{{- $lan_suffix := index .Headers "lan_suffix" -}}
+{{- $wifi_suffix := index .Headers "wifi_suffix" -}}
+{{- range .Items -}}
 {{- $name := index . "name" -}}
 {{- if index . "lan_ether" -}}
-{{- $suffix := index . "lan_suffix" -}}
-{{- $sname := print $name $suffix | printf "%-16s" -}}
+{{- $sname := print $name $lan_suffix | printf "%-16s" -}}
 host {{$sname}} { hardware ethernet {{index . "lan_ether"}}; fixed-address: {{index . "lan_ip" | printf "%s;" | printf "%-15s"}} }
 {{end}}
 {{- if index . "wifi_ether" -}}
-{{- $suffix := index . "wifi_suffix" -}}
-{{- $sname := print $name $suffix | printf "%-16s" -}}
+{{- $sname := print $name $wifi_suffix | printf "%-16s" -}}
 host {{$sname}} { hardware ethernet {{index . "wifi_ether"}}; fixed-address: {{index . "wifi_ip" | printf "%s;" | printf "%-15s"}} }
 {{ end }}
 {{- end -}}
