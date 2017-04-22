@@ -108,7 +108,10 @@ func main() {
 
 	if flagVerbose {
 		flag.VisitAll(func(f *flag.Flag) {
-			logger.Printf("Name: `%s`, Value: `%s`, Default: `%s`", f.Name, f.Value, f.DefValue)
+			logger.Printf(
+				"Name: `%s`, Value: `%s`, Default: `%s`",
+				f.Name, f.Value, f.DefValue,
+			)
 		})
 	}
 
