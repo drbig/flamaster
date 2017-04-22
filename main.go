@@ -14,13 +14,18 @@ import (
 )
 
 const (
-	VERSION        = "0.1"
+	// Current version
+	VERSION = "0.2"
+	// Case-sensitive string used to identify Options section
 	HEADER_OPTIONS = "options"
+	// Case-sensitive string used to identify Headers section
 	HEADER_HEADERS = "headers"
-	HEADER_ITEMS   = "items"
+	// Case-sensitive string used to identify Items section
+	HEADER_ITEMS = "items"
 )
 
 var (
+	// HEADERS is used for quick lookup of section transtions in CSV parsing
 	HEADERS = map[string]bool{
 		HEADER_OPTIONS: true,
 		HEADER_HEADERS: true,
@@ -29,11 +34,11 @@ var (
 )
 
 var (
-	flagVerbose            bool
-	flagSingleOutput       bool
-	flagOutputFileTemplate string
-	flagOutputRoot         string
-	logger                 *log.Logger
+	flagVerbose            bool        // Be _very_ verbose
+	flagSingleOutput       bool        // Process all items with single template
+	flagOutputFileTemplate string      // Text template for generating output file names
+	flagOutputRoot         string      // Where to output files by default
+	logger                 *log.Logger // Our debug logger instance
 )
 
 type (
@@ -47,6 +52,7 @@ type (
 	}
 )
 
+// Setup flags
 func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(
@@ -79,6 +85,12 @@ flamaster v%s, see LICENSE.txt
 	)
 }
 
+// Our main function which does:
+// 	1. Basic flag parsing
+//	2. Read template in
+//	3. Read the meat, aka the main CSV
+//  4. Merge in options if any given
+//	5. Spit out a template or templates
 func main() {
 	flag.Parse()
 	if flagVerbose {
@@ -133,6 +145,8 @@ func main() {
 	}
 }
 
+// Parse the template.
+// Accesses the arguments directly.
 func parse_template() (tmpl *template.Template) {
 	const arg = 0
 	var err error
@@ -146,6 +160,8 @@ func parse_template() (tmpl *template.Template) {
 	return tmpl
 }
 
+// Pparse the CSV.
+// Accesses the arguments directly.
 func parse_csv() (options Options, headers Headers, items []Item) {
 	const arg = 1
 	options = make(Options)
@@ -170,6 +186,7 @@ func parse_csv() (options Options, headers Headers, items []Item) {
 		}
 		logger.Printf("At row: `%s`", record)
 
+		// Section parsing aka state transitions.
 		if section != "" && record[0] == "" {
 			section = ""
 			continue
@@ -184,6 +201,7 @@ func parse_csv() (options Options, headers Headers, items []Item) {
 			continue
 		}
 
+		// Handle the actual "parsing".
 		switch section {
 		case HEADER_ITEMS:
 			if len(item_headers) == 0 {
@@ -206,6 +224,7 @@ func parse_csv() (options Options, headers Headers, items []Item) {
 		}
 	}
 
+	// We can indeed be _very_ verbose..
 	logger.Printf("Parsed options: `%s`", options)
 	logger.Printf("Parsed headers: `%s`", headers)
 	logger.Printf("Parsed items: `%s`", items)
@@ -213,6 +232,8 @@ func parse_csv() (options Options, headers Headers, items []Item) {
 	return options, headers, items
 }
 
+// Helper for reading a single CSV record.
+// Will die on any error except hitting end of file, which is not an error.
 func _read_csv_record(r *csv.Reader) (record []string, done bool) {
 	record, err := r.Read()
 
@@ -225,6 +246,7 @@ func _read_csv_record(r *csv.Reader) (record []string, done bool) {
 	return record, false
 }
 
+// Helper for dying in a decent fashion.
 func _die_on_err(err error) {
 	fmt.Fprintln(os.Stderr, "Please run with -v to see where this happened.")
 	fmt.Fprintln(os.Stderr, err)
