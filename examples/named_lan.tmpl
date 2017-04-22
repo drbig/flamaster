@@ -1,0 +1,13 @@
+$TTL 3h
+l. SOA l. l. 43 1d 12h 1w 3h
+                 ; Serial, Refresh, Retry, Expire, Neg. cache TTL
+
+            NS localhost
+localhost   A   127.0.0.1
+localhost   AAAA        ::1
+; BEGIN
+{{range .Items -}}
+{{- if index . "lan_ether" -}}
+{{index . "name" | printf "%-32s"}} A {{index . "lan_ip"}}
+{{end}}
+{{- end -}}
