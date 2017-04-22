@@ -34,7 +34,17 @@ var (
 	flagOutputFileTemplate string
 	flagOutputRoot         string
 	logger                 *log.Logger
-	tmpl                   *template.Template
+)
+
+type (
+	Item    map[string]string
+	Headers map[string]string
+	Options map[string]string
+	Data    struct {
+		Headers
+		Item
+		Items []Item
+	}
 )
 
 func init() {
@@ -84,13 +94,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	parse_template()
-	_, items := parse_csv()
+	tmpl := parse_template()
+	options, headers, items := parse_csv()
 
-	tmpl.Execute(os.Stdout, items)
+	if len(options) > 0 {
+		logger.Print("Merging options...")
+		for k, v := range options {
+			if err := flag.Set(k, v); err != nil {
+				_die_on_err(err)
+			}
+		}
+	}
+
+	if flagVerbose {
+		flag.VisitAll(func(f *flag.Flag) {
+			logger.Printf("Name: `%s`, Value: `%s`, Default: `%s`", f.Name, f.Value, f.DefValue)
+		})
+	}
+
+	if flagSingleOutput {
+		logger.Print("Running all items once...")
+		tmpl.Execute(
+			os.Stdout,
+			Data{Headers: headers, Items: items},
+		)
+		return
+	}
+
+	logger.Print("Running template per item...")
+	for _, item := range items {
+		tmpl.Execute(
+			os.Stdout,
+			Data{Headers: headers, Item: item},
+		)
+	}
 }
 
-func parse_template() {
+func parse_template() (tmpl *template.Template) {
 	const arg = 0
 	var err error
 
@@ -99,10 +139,14 @@ func parse_template() {
 	if err != nil {
 		_die_on_err(err)
 	}
+
+	return tmpl
 }
 
-func parse_csv() (options map[string]string, items []map[string]string) {
+func parse_csv() (options Options, headers Headers, items []Item) {
 	const arg = 1
+	options = make(Options)
+	headers = make(Headers)
 
 	logger.Printf("Opening input CSV at '%s'...", flag.Arg(arg))
 	fh, err := os.Open(flag.Arg(arg))
@@ -112,8 +156,6 @@ func parse_csv() (options map[string]string, items []map[string]string) {
 	defer fh.Close()
 
 	var item_headers []string
-	var raw_items []map[string]string
-	headers := make(map[string]string)
 	section := ""
 
 	logger.Print("Parsing CSV file...")
@@ -151,7 +193,7 @@ func parse_csv() (options map[string]string, items []map[string]string) {
 				item[header] = record[idx]
 			}
 
-			raw_items = append(raw_items, item)
+			items = append(items, item)
 		case HEADER_HEADERS:
 			headers[record[0]] = record[1]
 		case HEADER_OPTIONS:
@@ -163,21 +205,9 @@ func parse_csv() (options map[string]string, items []map[string]string) {
 
 	logger.Printf("Parsed options: `%s`", options)
 	logger.Printf("Parsed headers: `%s`", headers)
-	logger.Printf("Parsed items: `%s`", raw_items)
+	logger.Printf("Parsed items: `%s`", items)
 
-	logger.Print("Merging headers into items...")
-	for _, raw_item := range raw_items {
-		item := make(map[string]string, len(item_headers)+len(headers))
-		for k, v := range headers {
-			item[k] = v
-		}
-		for k, v := range raw_item {
-			item[k] = v
-		}
-		items = append(items, item)
-	}
-
-	return options, items
+	return options, headers, items
 }
 
 func _read_csv_record(r *csv.Reader) (record []string, done bool) {
@@ -193,6 +223,7 @@ func _read_csv_record(r *csv.Reader) (record []string, done bool) {
 }
 
 func _die_on_err(err error) {
+	fmt.Fprintln(os.Stderr, "Please run with -v to see where this happened.")
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(2)
 }
